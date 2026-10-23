@@ -133,7 +133,11 @@ for p in json.load(sys.stdin):
     (( DRY_RUN )) && opts+=(--dry-run)
     # conda est toujours lancé : en simulation, son --dry-run affiche le plan
     echo "  \$ conda install -p $prefix ${opts[*]-} ${conda_specs[*]}"
-    conda install -p "$prefix" "${opts[@]+"${opts[@]}"}" "${conda_specs[@]}"
+    # A failing env (inconsistent, conda pinned by an old mamba…) must not stop
+    # the others; the pip wheels below still apply.
+    if ! conda install -p "$prefix" "${opts[@]+"${opts[@]}"}" "${conda_specs[@]}"; then
+      WARNINGS+=("$prefix : conda install a échoué (voir ci-dessus), paquets conda non mis à jour.")
+    fi
     if (( ${#pip_wheels[@]} )); then
       run "$py" -I -m pip install --no-index --no-deps --upgrade "${pip_wheels[@]}"
     fi
