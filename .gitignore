@@ -1,0 +1,6 @@
+.venv/
+models/
+.hf/
+.torch/
+.cache/
+tmp/
