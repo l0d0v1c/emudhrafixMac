@@ -201,7 +201,9 @@ update_brew() {
     v=${f#python@}
     py="$(brew --prefix)/bin/python$v"
     [[ -x $py ]] || continue
-    pip_v=$("$py" -I -c 'import importlib.metadata as m; print(m.version("pip"))' 2>/dev/null || echo "")
+    # Version of the pip module actually imported: importlib.metadata may pick a
+    # stale pip-X.dist-info left next to the one linked by brew.
+    pip_v=$("$py" -I -c 'import pip; print(pip.__version__)' 2>/dev/null || echo "")
     if [[ -z $pip_v ]]; then
       echo "  python$v : pas de pip"
     elif ! "$py" -I -c 'import sys; sys.exit(sys.version_info < (3, 10))'; then
