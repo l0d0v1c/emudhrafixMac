@@ -108,18 +108,26 @@ for p in json.load(sys.stdin):
     echo "  Python $py_ver"
 
     local conda_specs=("ca-certificates>=$MIN_CACERTS")
-    local pip_wheels=()
+    local pip_wheels=() fallback_wheels=() conda_spec=""
     while read -r name channel version; do
       case $name in
         certifi)
           if [[ $channel == pypi ]]; then pip_wheels+=("$WORK/$CERTIFI_WHL")
-          else conda_specs+=("$channel::certifi>=$MIN_CERTIFI"); fi ;;
+          else
+            conda_specs+=("$channel::certifi>=$MIN_CERTIFI")
+            fallback_wheels+=("$WORK/$CERTIFI_WHL")
+          fi ;;
         pip)
           (( py_ok )) || continue
           if [[ $channel == pypi ]]; then pip_wheels+=("$WORK/$PIP_WHL")
-          else conda_specs+=("$channel::pip>=$MIN_PIP"); fi ;;
+          else
+            conda_specs+=("$channel::pip>=$MIN_PIP")
+            fallback_wheels+=("$WORK/$PIP_WHL")
+          fi ;;
         conda)
-          conda_specs+=("$channel::conda>=$MIN_CONDA") ;;
+          # Upgraded on its own: conda 26.9.4 needs Python >= 3.11 and must not
+          # block the CA packages and pip, which are what actually matters.
+          conda_spec="$channel::conda>=$MIN_CONDA" ;;
       esac
     done < <(pkg_info "$prefix")
 
@@ -133,13 +141,27 @@ for p in json.load(sys.stdin):
     (( DRY_RUN )) && opts+=(--dry-run)
     # conda est toujours lancé : en simulation, son --dry-run affiche le plan
     echo "  \$ conda install -p $prefix ${opts[*]-} ${conda_specs[*]}"
-    # A failing env (inconsistent, conda pinned by an old mamba…) must not stop
-    # the others; the pip wheels below still apply.
+    # A failing env (inconsistent, unsatisfiable…) must not stop the others.
+    # pip < 26.2.2 stays vulnerable whatever conda does, so fall back to the
+    # verified wheels, even over conda's own pip/certifi.
     if ! conda install -p "$prefix" "${opts[@]+"${opts[@]}"}" "${conda_specs[@]}"; then
-      WARNINGS+=("$prefix : conda install a échoué (voir ci-dessus), paquets conda non mis à jour.")
+      if (( ${#fallback_wheels[@]} )); then
+        pip_wheels+=("${fallback_wheels[@]}")
+        WARNINGS+=("$prefix : conda install a échoué, pip/certifi remplacés par les wheels vérifiées (conda les listera comme pypi).")
+      else
+        WARNINGS+=("$prefix : conda install a échoué (voir ci-dessus), ca-certificates non mis à jour.")
+      fi
     fi
     if (( ${#pip_wheels[@]} )); then
-      run "$py" -I -m pip install --no-index --no-deps --upgrade "${pip_wheels[@]}"
+      if ! run "$py" -I -m pip install --no-index --no-deps --upgrade "${pip_wheels[@]}"; then
+        WARNINGS+=("$prefix : installation des wheels pip/certifi échouée (voir ci-dessus).")
+      fi
+    fi
+    if [[ -n $conda_spec ]]; then
+      echo "  \$ conda install -p $prefix ${opts[*]-} $conda_spec"
+      if ! conda install -p "$prefix" "${opts[@]+"${opts[@]}"}" "$conda_spec"; then
+        WARNINGS+=("$prefix : conda non mis à jour vers $MIN_CONDA (Python $py_ver ?). Sans risque si ca-certificates et certifi sont à jour.")
+      fi
     fi
 
     # Python < 3.10 : pip 26.2.2 indisponible. Un pip ancien (sans truststore)

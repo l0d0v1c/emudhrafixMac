@@ -35,10 +35,17 @@ Versions corrigées :
 2. **Environnements conda** (base et tous les autres) :
    - conda utilise le `cacert.pem` du certifi vérifié (`CONDA_SSL_VERIFY`) au
      lieu de son bundle, potentiellement vulnérable ;
-   - `ca-certificates`, `certifi` et `pip` sont mis à jour, plus `conda` dans
-     base ; un paquet installé par conda est mis à jour par conda, un paquet
-     installé par pip est remplacé par la wheel vérifiée, installée hors ligne
-     (`--no-index`) ;
+   - `ca-certificates`, `certifi` et `pip` sont mis à jour ; un paquet
+     installé par conda est mis à jour par conda, un paquet installé par pip
+     est remplacé par la wheel vérifiée, installée hors ligne (`--no-index`) ;
+   - si `conda install` échoue (environnement incohérent ou insoluble), pip et
+     certifi sont quand même remplacés par les wheels vérifiées, même s'ils
+     venaient de conda : un pip < 26.2.2 reste vulnérable quoi qu'il arrive ;
+   - `conda` lui-même est mis à jour à part, ensuite. conda 26.9.4 exige
+     Python ≥ 3.11 ; un échec est signalé mais sans gravité, car selon le
+     [blog conda](https://conda.org/blog/2026-10-21-emudhra-security-updates)
+     un conda plus ancien est sûr si `ca-certificates` et `certifi` sont à
+     jour ;
    - pour un environnement en Python < 3.10, où pip 26.2.2 ne s'installe pas,
      certifi est mis à jour et un `pip.conf` propre à l'environnement oblige
      l'ancien pip à utiliser ce certifi à jour au lieu de son bundle intégré.
